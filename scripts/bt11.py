@@ -181,11 +181,34 @@ class BT11:
         values = list(dict.fromkeys([c for c in codecs if c not in (0, 1, 2)]))
         if any(c not in (*CODECS, 9) for c in values):
             raise ValueError('Unknown Bluetooth codec.')
-        self.request(7, bytes(values + [2, 1, 0]))
-        if 8 in values:
-            self.request(67, bytes([ldac_mode]))
-        if 7 in values:
-            self.request(65, bytes([aptx_mode]))
+        target = bytes(values + [2, 1, 0])
+        codecs_changed = self.request(6) != target
+        ldac_changed = 8 in values and self.byte(66) != ldac_mode
+        aptx_changed = 7 in values and self.byte(64) != aptx_mode
+        if not (codecs_changed or ldac_changed or aptx_changed):
+            return
+        connected = [d['address'] for d in self.devices() if d['connected']]
+        # Disabling an in-use codec can wedge the BT11 USB interface. Never
+        # change codec configuration until every audio link is disconnected.
+        for address in connected:
+            self.device_action(17, address)
+        deadline = time.monotonic() + 10
+        while connected and any(d['connected'] for d in self.devices()):
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Headphones did not disconnect. Codec settings were not changed.')
+            time.sleep(0.25)
+        try:
+            if codecs_changed:
+                self.request(7, target)
+            if ldac_changed:
+                self.request(67, bytes([ldac_mode]))
+            if aptx_changed:
+                self.request(65, bytes([aptx_mode]))
+        except RuntimeError as error:
+            raise RuntimeError('Codec update failed. Headphones were left disconnected. '
+                               'If BT11 is unresponsive, unplug and reinsert it, then Refresh.') from error
+        for address in connected:
+            self.connect(address)
 
     def set_pairing(self, value):
         if value not in PAIRING_MODES:

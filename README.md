@@ -29,6 +29,10 @@ headphones shown there. Only one BT11 should be connected at a time.
 - Bluetooth transmitter name and LED brightness (0–7).
 - LDAC, aptX Adaptive, aptX HD, aptX and aptX LL enable/disable.
 - LDAC quality and aptX Adaptive latency, quality and lossless modes.
+- Codec changes disconnect all connected headphones and confirm disconnection
+  before writing, then reconnect them. Unchanged settings leave audio playing.
+  If disconnect confirmation fails, no codec settings are written. If a write
+  fails, the app leaves headphones disconnected and reports recovery steps.
 - Paired-device list, connect, disconnect and forget.
 - Paired-device rows show live RSSI, bitrate and current codec for the single
   connected headphone. Disconnected rows show dashes. With multiple connected
@@ -51,6 +55,10 @@ Click **Refresh** to read actual settings or after reconnecting USB. Scan runs
 for 12 seconds, can be stopped, and restores the previous pairing mode. Auto
 discovery can pair nearby headphones automatically and asks before it begins.
 If responses time out, close other FiiO control applications and refresh.
+Live sampling stops on transport failure; Refresh resumes sampling. If the
+BT11 disappears from USB after a codec change, close the control window and
+unplug/reinsert the dongle. Disabling an in-use codec without disconnecting
+first was observed to wedge this BT11; the app now avoids that sequence.
 
 ## Commands
 

@@ -69,6 +69,7 @@ class ControlPanel:
             check.pack(side='left', padx=(0, 12))
             self.controls.append((check, 'normal'))
         ttk.Label(codecs, text='SBC remains available. Enabled codecs depend on what the headphones support.').pack(anchor='w', pady=6)
+        ttk.Label(codecs, text='Saving codec changes briefly disconnects and reconnects headphones.').pack(anchor='w')
         quality = ttk.Frame(codecs)
         quality.pack(fill='x')
         ttk.Label(quality, text='LDAC quality').grid(row=0, column=0, sticky='w')
@@ -157,6 +158,7 @@ class ControlPanel:
         threading.Thread(target=worker, daemon=True).start()
 
     def refresh(self):
+        self.graphs.live.set(True)
         self.submit('Reading BT11 settings…', lambda _: None)
 
     def refresh_codec(self):
@@ -172,7 +174,7 @@ class ControlPanel:
                         status = device.link_status()
                         status['devices'] = device.devices()
                 except Exception:
-                    status = {'codec': 'Unavailable (transmitter busy or disconnected)'}
+                    status = {'codec': 'Unavailable (transmitter busy or disconnected)', 'poll_error': True}
                 self.events.put(('link', status))
             threading.Thread(target=worker, daemon=True).start()
         else:
@@ -204,7 +206,7 @@ class ControlPanel:
         except StopIteration:
             messagebox.showerror('Codec modes', 'Select valid LDAC and aptX modes before saving.', parent=self.root)
             return
-        self.submit('Saving codecs and quality modes…', lambda d: d.set_codecs(enabled, ldac, aptx))
+        self.submit('Disconnecting headphones, saving codec settings, then reconnecting…', lambda d: d.set_codecs(enabled, ldac, aptx))
 
     def save_pairing(self):
         mode = self.mode(self.pairing, PAIRING_MODES)
@@ -319,6 +321,9 @@ class ControlPanel:
                     self.graphs.update_status(data)
                     self.render_link_rows(data)
                     self.active_codec.set('Active codec: ' + data['codec'])
+                    if data.get('poll_error'):
+                        self.graphs.live.set(False)
+                        self.status.set('Live sampling stopped: BT11 is busy or unavailable. Close other control apps; if needed, unplug/reinsert BT11, then Refresh.')
                 else:
                     self.active_codec.set('Active codec: ' + data)
                 if self.closing:

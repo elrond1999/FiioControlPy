@@ -89,6 +89,10 @@ class GUITests(unittest.TestCase):
                 panel.poll()
                 self.assertEqual(panel.graphs.values.get(), 'RSSI: —    Bitrate: —')
                 self.assertEqual(panel.name.get(), 'Unsaved name')
+                panel.events.put(('link', {'codec': 'Unavailable', 'poll_error': True}))
+                panel.poll()
+                self.assertFalse(panel.graphs.live.get())
+                self.assertIn('sampling stopped', panel.status.get())
         finally:
             root.update_idletasks()
             for callback in root.tk.call('after', 'info'):
