@@ -30,6 +30,14 @@ def codec_status(data):
     return names.get(codec, f'Unknown codec (0x{codec:02X})')
 
 
+def parse_link_status(data):
+    """Experimental fields inferred from movement measurements, not documented."""
+    available = len(data) >= 16 and data[1] != 0
+    return {'codec': codec_status(data),
+            'rssi': int.from_bytes(data[12:14], 'little', signed=True) if available else None,
+            'bitrate_kbps': int.from_bytes(data[8:12], 'little') / 1000 if available else None}
+
+
 def frame(command, payload=b'', feature=24):
     if len(payload) > 255:
         raise ValueError('Payload is too large.')
@@ -145,12 +153,15 @@ class BT11:
         }
 
     def active_codec(self):
+        return self.link_status()['codec']
+
+    def link_status(self):
         # The mobile app sends selector 4; an empty payload gets no reply.
         # Older firmware may not implement this optional status command.
         try:
-            return codec_status(self.request(0x71, b'\x04'))
+            return parse_link_status(self.request(0x71, b'\x04'))
         except RuntimeError:
-            return 'Unavailable (device did not respond)'
+            return {'codec': 'Unavailable (device did not respond)', 'rssi': None, 'bitrate_kbps': None}
 
     def set_name(self, name):
         encoded = name.encode('utf-8')

@@ -33,8 +33,10 @@ headphones shown there. Only one BT11 should be connected at a time.
 - Close, Auto and Manual pairing modes; nearby discovery; pair and connect.
 - Clear pairings and restore defaults, with confirmation dialogs.
 - Firmware version display.
-- Active Bluetooth codec, refreshed every five seconds while idle, including
+- Active Bluetooth codec, refreshed every second while idle, including
   the reported LDAC bitrate mode and aptX Adaptive quality/lossless status.
+- Live RSSI and bitrate graphs with 120 seconds of history, pause and clear controls.
+  Sampling pauses during device operations; missing measurements appear as gaps.
 
 Firmware flashing is not implemented natively. The settings window links to the
 official FiiO web updater for that operation. Codec availability depends on the
@@ -85,6 +87,16 @@ Active codec uses command `0x71` with payload `04`, inspected in FiiO's official
 Android Control 4.6.0 app and verified on this BT11. It reports the negotiated
 codec and quality mode, not a measurement of instantaneous audio throughput.
 Firmware without this command displays Unavailable; ordinary settings remain usable.
+
+The graph decodes payload offsets 8–11 as a little-endian unsigned bitrate in
+bits/s and 12–13 as signed little-endian RSSI in dBm. These interpretations are
+supported by a three-minute movement test on the user's BT11: signal values
+fell to -92 at the reception edge and recovered near -67, while the bitrate
+field normally stayed near 607 kbps and dipped during weak reception. FiiO's
+Android app does not document or decode these fields. Their exact measurement
+semantics and applicability to other firmware remain unverified. This is not
+a packet-loss measurement, and the graphs are transmitter-level rather than
+per-headphone measurements.
 
 This is an unofficial utility and is not affiliated with FiiO. No support for
 other transmitter models is claimed.

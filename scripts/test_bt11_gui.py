@@ -19,6 +19,25 @@ class MissingDevice:
 
 
 class GUITests(unittest.TestCase):
+    def test_graph_leaves_gaps_between_unavailable_samples(self):
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            graph = panel_module.LinkGraphs(root)
+            now = time.monotonic()
+            graph.samples.extend([(now-5, -67, 607), (now-4, -68, 608),
+                                  (now-3, None, None), (now-2, -69, 606),
+                                  (now-1, -70, 607)])
+            with patch.object(graph.canvas, 'winfo_width', return_value=500), patch.object(graph.canvas, 'winfo_height', return_value=400):
+                graph.draw()
+            for color in ['#2166ac', '#1b7837']:
+                traces = [item for item in graph.canvas.find_all() if graph.canvas.type(item) == 'line' and graph.canvas.itemcget(item, 'fill') == color]
+                self.assertEqual(len(traces), 2)
+                self.assertTrue(all(len(graph.canvas.coords(item)) == 4 for item in traces))
+        finally:
+            root.update_idletasks()
+            root.destroy()
+
     def test_codec_update_preserves_unsaved_settings(self):
         root = tk.Tk()
         root.withdraw()
@@ -28,13 +47,22 @@ class GUITests(unittest.TestCase):
                 panel.name.set('Unsaved name')
                 panel.ldac.set('Unsaved mode')
                 panel.codec_busy = True
-                panel.events.put(('codec', 'LDAC (660 / 606 kbps)'))
+                panel.events.put(('link', {'codec': 'LDAC (660 / 606 kbps)', 'rssi': -67, 'bitrate_kbps': 607.2}))
                 panel.poll()
                 self.assertFalse(panel.codec_busy)
                 self.assertEqual(panel.name.get(), 'Unsaved name')
                 self.assertEqual(panel.ldac.get(), 'Unsaved mode')
                 self.assertEqual(panel.active_codec.get(), 'Active codec: LDAC (660 / 606 kbps)')
+                self.assertIn('-67 dBm', panel.graphs.values.get())
+                self.assertIn('607.2 kbps', panel.graphs.values.get())
+                panel.events.put(('link', {'codec': 'Unavailable', 'rssi': None, 'bitrate_kbps': None}))
+                panel.poll()
+                self.assertEqual(panel.graphs.values.get(), 'RSSI: —    Bitrate: —')
+                self.assertEqual(panel.name.get(), 'Unsaved name')
         finally:
+            root.update_idletasks()
+            for callback in root.tk.call('after', 'info'):
+                root.after_cancel(callback)
             root.destroy()
 
     def test_unplugged_transmitter_keeps_refresh_available(self):
@@ -53,6 +81,9 @@ class GUITests(unittest.TestCase):
                 available = [str(widget['text']) for widget, _ in panel.controls if str(widget['state']) != 'disabled']
                 self.assertEqual(available, ['Refresh'])
         finally:
+            root.update_idletasks()
+            for callback in root.tk.call('after', 'info'):
+                root.after_cancel(callback)
             root.destroy()
 
 

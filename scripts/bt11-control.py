@@ -8,6 +8,7 @@ import webbrowser
 from tkinter import messagebox, ttk
 
 from bt11 import APTX_MODES, BT11, CODECS, LDAC_MODES, PAIRING_MODES
+from bt11_graphs import LinkGraphs
 
 
 class ControlPanel:
@@ -20,8 +21,8 @@ class ControlPanel:
         self.codec_busy = False
         self.controls = []
         root.title('FiiO BT11 Control')
-        root.geometry('760x870')
-        root.minsize(700, 850)
+        root.geometry('760x900')
+        root.minsize(700, 880)
         root.protocol('WM_DELETE_WINDOW', self.close)
         style = ttk.Style(root)
         style.theme_use('vista' if 'vista' in style.theme_names() else 'clam')
@@ -33,7 +34,13 @@ class ControlPanel:
         self.codec_vars = {code: tk.BooleanVar() for code in CODECS}
         self.firmware = tk.StringVar(value='Firmware: —')
         self.active_codec = tk.StringVar(value='Active codec: —')
-        outer = ttk.Frame(root, padding=18)
+        tabs = ttk.Notebook(root)
+        tabs.pack(fill='both', expand=True)
+        settings = ttk.Frame(tabs)
+        tabs.add(settings, text='Settings')
+        self.graphs = LinkGraphs(tabs)
+        tabs.add(self.graphs, text='Live RSSI & bitrate')
+        outer = ttk.Frame(settings, padding=18)
         outer.pack(fill='both', expand=True)
         header = ttk.Frame(outer)
         header.pack(fill='x')
@@ -98,7 +105,7 @@ class ControlPanel:
         self.button(maintenance, 'Clear all pairings…', lambda: self.maintenance(20)).pack(side='left')
         self.button(maintenance, 'Restore defaults…', lambda: self.maintenance(121)).pack(side='left', padx=8)
         root.after(100, self.poll)
-        root.after(5000, self.refresh_codec)
+        root.after(1000, self.refresh_codec)
         self.refresh()
 
     def button(self, parent, text, command):
@@ -152,17 +159,21 @@ class ControlPanel:
     def refresh_codec(self):
         if self.closing or self.smoke:
             return
-        if not self.busy and not self.codec_busy and self.current and not self.failed:
+        if not self.graphs.live.get():
+            self.graphs.update_status(message='Live sampling paused')
+        elif not self.busy and not self.codec_busy and self.current and not self.failed:
             self.codec_busy = True
             def worker():
                 try:
                     with BT11() as device:
-                        status = device.active_codec()
+                        status = device.link_status()
                 except Exception:
-                    status = 'Unavailable (transmitter busy or disconnected)'
-                self.events.put(('codec', status))
+                    status = {'codec': 'Unavailable (transmitter busy or disconnected)'}
+                self.events.put(('link', status))
             threading.Thread(target=worker, daemon=True).start()
-        self.root.after(5000, self.refresh_codec)
+        else:
+            self.graphs.update_status(message='Sampling waits while a device operation is running' if self.busy or self.codec_busy else 'Refresh settings to resume sampling')
+        self.root.after(1000, self.refresh_codec)
 
     @staticmethod
     def mode(variable, mapping):
@@ -276,9 +287,13 @@ class ControlPanel:
             kind, data = self.events.get_nowait()
             if kind == 'snapshot':
                 self.render(data)
-            elif kind == 'codec':
+            elif kind in ('codec', 'link'):
                 self.codec_busy = False
-                self.active_codec.set('Active codec: ' + data)
+                if kind == 'link':
+                    self.graphs.update_status(data)
+                    self.active_codec.set('Active codec: ' + data['codec'])
+                else:
+                    self.active_codec.set('Active codec: ' + data)
                 if self.closing:
                     self.root.destroy()
                     return
