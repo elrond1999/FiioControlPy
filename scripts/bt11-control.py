@@ -69,7 +69,6 @@ class ControlPanel:
             check.pack(side='left', padx=(0, 12))
             self.controls.append((check, 'normal'))
         ttk.Label(codecs, text='SBC remains available. Enabled codecs depend on what the headphones support.').pack(anchor='w', pady=6)
-        ttk.Label(codecs, text='Saving codec changes briefly disconnects and reconnects headphones.').pack(anchor='w')
         quality = ttk.Frame(codecs)
         quality.pack(fill='x')
         ttk.Label(quality, text='LDAC quality').grid(row=0, column=0, sticky='w')
@@ -206,7 +205,7 @@ class ControlPanel:
         except StopIteration:
             messagebox.showerror('Codec modes', 'Select valid LDAC and aptX modes before saving.', parent=self.root)
             return
-        self.submit('Disconnecting headphones, saving codec settings, then reconnecting…', lambda d: d.set_codecs(enabled, ldac, aptx))
+        self.submit('Saving codecs and quality modes…', lambda d: d.set_codecs(enabled, ldac, aptx))
 
     def save_pairing(self):
         mode = self.mode(self.pairing, PAIRING_MODES)
