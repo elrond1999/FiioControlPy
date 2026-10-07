@@ -4,10 +4,29 @@ Native Windows Python control for the **FiiO BT11** USB Bluetooth transmitter.
 The app communicates directly over USB HID; Chrome and the FiiO web app are not
 needed for ordinary settings or headphone connections.
 
+## Screenshots
+
+Settings, paired headphones, and live codec/RSSI/bitrate readings
+(Bluetooth address replaced with an example for the screenshot):
+
+![FiiO BT11 settings and paired headphone status](docs/images/settings.png)
+
+Live graphs with two minutes of history. This screenshot replays a recorded
+movement session, walking to the reception edge and returning:
+
+![Live RSSI and bitrate graphs](docs/images/live-graphs.png)
+
 ## Setup
 
 Requirements: Windows, Python 3.12 or later, [uv](https://docs.astral.sh/uv/),
 and a connected BT11. Dependencies are pinned in `uv.lock`.
+
+Clone the repository, then run the setup commands from its directory:
+
+```powershell
+git clone https://github.com/elrond1999/FiioControlPy.git
+cd FiioControlPy
+```
 
 ```powershell
 uv sync --locked
@@ -84,7 +103,7 @@ uv run python -m unittest discover -s scripts -p 'test_bt11*.py'
 
 Tested on a BT11 running firmware 1.1.4 with WH-1000XM5 headphones. Validation
 included native reconnection, settings reads and write/read checks, manual
-discovery with pairing-mode restoration, GUI startup/layout, and nine automated
+discovery with pairing-mode restoration, GUI startup/layout, and 21 automated
 protocol/GUI tests. Active-codec parsing and background updates also have
 automated coverage. New pairing, forgetting, factory reset and automatic pairing
 were not exercised on the original user's hardware.
