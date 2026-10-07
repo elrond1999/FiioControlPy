@@ -30,6 +30,10 @@ headphones shown there. Only one BT11 should be connected at a time.
 - LDAC, aptX Adaptive, aptX HD, aptX and aptX LL enable/disable.
 - LDAC quality and aptX Adaptive latency, quality and lossless modes.
 - Paired-device list, connect, disconnect and forget.
+- Paired-device rows show live RSSI, bitrate and current codec for the single
+  connected headphone. Disconnected rows show dashes. With multiple connected
+  headphones, the app identifies the readings as shared in the live tab rather
+  than assigning transmitter-level readings to individual headphones.
 - Close, Auto and Manual pairing modes; nearby discovery; pair and connect.
 - Clear pairings and restore defaults, with confirmation dialogs.
 - Firmware version display.

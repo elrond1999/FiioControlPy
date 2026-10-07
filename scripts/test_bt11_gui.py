@@ -19,6 +19,36 @@ class MissingDevice:
 
 
 class GUITests(unittest.TestCase):
+    def test_paired_telemetry_tracks_connection_and_preserves_selection(self):
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            with patch.object(panel_module.ControlPanel, 'refresh'):
+                panel = panel_module.ControlPanel(root)
+                devices = [{'name': 'WH-1000XM5', 'address': '58:18:62:21:db:68', 'connected': True},
+                           {'name': 'Other', 'address': '00:11:22:33:44:55', 'connected': False}]
+                panel.fill(panel.paired_tree, devices)
+                status = {'devices': devices, 'codec': 'LDAC (660 / 606 kbps)', 'rssi': -67, 'bitrate_kbps': 607.2}
+                panel.render_link_rows(status)
+                rows = panel.paired_tree.get_children()
+                self.assertEqual(panel.paired_tree.item(rows[0], 'values')[3:], ('-67 dBm', '607.2 kbps', 'LDAC (660 / 606 kbps)'))
+                self.assertEqual(panel.paired_tree.item(rows[1], 'values')[3:], ('—', '—', '—'))
+                self.assertEqual(panel.selected(panel.paired_tree), ('WH-1000XM5', 'Connected', '58:18:62:21:db:68'))
+                devices[0]['connected'] = False
+                panel.render_link_rows(status)
+                selected = panel.paired_tree.selection()[0]
+                self.assertEqual(panel.paired_tree.item(selected, 'values')[2:], ('58:18:62:21:db:68', '—', '—', '—'))
+                devices[0]['connected'] = devices[1]['connected'] = True
+                panel.render_link_rows(status)
+                for row in panel.paired_tree.get_children():
+                    self.assertEqual(panel.paired_tree.set(row, 'rssi'), '—')
+                    self.assertIn('Shared link', panel.paired_tree.set(row, 'codec'))
+        finally:
+            root.update_idletasks()
+            for callback in root.tk.call('after', 'info'):
+                root.after_cancel(callback)
+            root.destroy()
+
     def test_graph_leaves_gaps_between_unavailable_samples(self):
         root = tk.Tk()
         root.withdraw()

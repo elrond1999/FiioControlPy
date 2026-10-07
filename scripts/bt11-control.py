@@ -21,8 +21,8 @@ class ControlPanel:
         self.codec_busy = False
         self.controls = []
         root.title('FiiO BT11 Control')
-        root.geometry('760x900')
-        root.minsize(700, 880)
+        root.geometry('940x900')
+        root.minsize(900, 880)
         root.protocol('WM_DELETE_WINDOW', self.close)
         style = ttk.Style(root)
         style.theme_use('vista' if 'vista' in style.theme_names() else 'clam')
@@ -78,7 +78,7 @@ class ControlPanel:
         self.button(quality, 'Save codecs', self.save_codecs).grid(row=0, column=2, rowspan=2, padx=8)
         devices = ttk.LabelFrame(outer, text='Paired headphones', padding=10)
         devices.pack(fill='x', pady=(0, 10))
-        self.paired_tree = self.tree(devices, 3)
+        self.paired_tree = self.tree(devices, 3, telemetry=True)
         row = ttk.Frame(devices)
         row.pack(fill='x', pady=(8, 0))
         self.button(row, 'Connect selected', lambda: self.device_action(16)).pack(side='left')
@@ -123,9 +123,12 @@ class ControlPanel:
         self.controls.append((widget, 'readonly'))
         return widget
 
-    def tree(self, parent, height):
-        tree = ttk.Treeview(parent, columns=('name', 'status', 'address'), show='headings', height=height, selectmode='browse')
-        for column, title, width in [('name', 'Name', 260), ('status', 'Status', 100), ('address', 'Bluetooth address', 210)]:
+    def tree(self, parent, height, telemetry=False):
+        columns = [('name', 'Name', 170), ('status', 'Status', 90), ('address', 'Bluetooth address', 160)]
+        if telemetry:
+            columns += [('rssi', 'RSSI', 80), ('bitrate', 'Bitrate', 95), ('codec', 'Current codec', 260)]
+        tree = ttk.Treeview(parent, columns=tuple(c[0] for c in columns), show='headings', height=height, selectmode='browse')
+        for column, title, width in columns:
             tree.heading(column, text=title)
             tree.column(column, width=width, minwidth=60)
         tree.pack(fill='x')
@@ -167,6 +170,7 @@ class ControlPanel:
                 try:
                     with BT11() as device:
                         status = device.link_status()
+                        status['devices'] = device.devices()
                 except Exception:
                     status = {'codec': 'Unavailable (transmitter busy or disconnected)'}
                 self.events.put(('link', status))
@@ -211,7 +215,7 @@ class ControlPanel:
         if not selection:
             messagebox.showinfo('Select headphones', 'Select a device from the list first.', parent=self.root)
             return None
-        return tree.item(selection[0], 'values')
+        return tree.item(selection[0], 'values')[:3]
 
     def device_action(self, command):
         selected = self.selected(self.paired_tree)
@@ -281,6 +285,28 @@ class ControlPanel:
         self.firmware.set('Firmware: ' + snapshot['firmware'])
         self.active_codec.set('Active codec: ' + snapshot.get('active_codec', 'Unavailable'))
         self.fill(self.paired_tree, snapshot['devices'])
+        self.render_link_rows({'codec': snapshot.get('active_codec', 'Unavailable')})
+
+    def render_link_rows(self, status):
+        if 'devices' in status:
+            self.fill(self.paired_tree, status['devices'])
+            if self.current:
+                self.current['devices'] = status['devices']
+        connected = [item for item in self.paired_tree.get_children()
+                     if self.paired_tree.set(item, 'status') == 'Connected']
+        for item in self.paired_tree.get_children():
+            for column in ('rssi', 'bitrate', 'codec'):
+                self.paired_tree.set(item, column, '—')
+        if len(connected) == 1:
+            item = connected[0]
+            rssi, bitrate = status.get('rssi'), status.get('bitrate_kbps')
+            self.paired_tree.set(item, 'rssi', f'{rssi} dBm' if rssi is not None else '—')
+            self.paired_tree.set(item, 'bitrate', f'{bitrate:.1f} kbps' if bitrate is not None else '—')
+            codec = status.get('codec', '')
+            self.paired_tree.set(item, 'codec', codec if codec and not codec.startswith(('Unavailable', 'No active', 'Unknown')) else '—')
+        elif len(connected) > 1:
+            for item in connected:
+                self.paired_tree.set(item, 'codec', 'Shared link; see live tab')
 
     def poll(self):
         while not self.events.empty():
@@ -291,6 +317,7 @@ class ControlPanel:
                 self.codec_busy = False
                 if kind == 'link':
                     self.graphs.update_status(data)
+                    self.render_link_rows(data)
                     self.active_codec.set('Active codec: ' + data['codec'])
                 else:
                     self.active_codec.set('Active codec: ' + data)
@@ -306,6 +333,7 @@ class ControlPanel:
                 self.status.set(('Operation failed: ' if self.failed else '') + data)
                 if self.failed:
                     self.active_codec.set('Active codec: Unavailable')
+                    self.render_link_rows({})
                 for widget, state in self.controls:
                     is_refresh = isinstance(widget, ttk.Button) and widget['text'] == 'Refresh'
                     widget.configure(state=state if self.current and not self.failed else ('normal' if is_refresh else 'disabled'))
