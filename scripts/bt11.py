@@ -12,6 +12,24 @@ APTX_MODES = {2: 'Low latency', 3: 'High quality', 19: 'Lossless'}
 PAIRING_MODES = {0: 'Close', 1: 'Auto', 2: 'Manual'}
 
 
+def codec_status(data):
+    """Decode command 0x71, as used by FiiO Control Android 4.6.0."""
+    if len(data) < 3:
+        return 'Unavailable (incomplete response)'
+    codec, mode = data[1:3]
+    names = {0: 'No active codec', 1: 'SBC', 3: 'aptX', 4: 'aptX LL v1',
+             5: 'aptX LL', 6: 'aptX HD', 9: 'LHDC',
+             16: 'aptX Adaptive (LE Audio)', 17: 'LC3 (LE Audio)'}
+    if codec == 8:
+        rates = {0: '990 / 909', 1: '660 / 606', 2: '330 / 303'}
+        return f'LDAC ({rates[mode]} kbps)' if mode in rates else 'LDAC'
+    if codec == 7:
+        if mode == 19 or (mode == 3 and len(data) > 18 and data[18] == 1):
+            return 'aptX Adaptive (Lossless)'
+        return {2: 'aptX Adaptive (Low latency)', 3: 'aptX Adaptive (High quality)'}.get(mode, 'aptX Adaptive')
+    return names.get(codec, f'Unknown codec (0x{codec:02X})')
+
+
 def frame(command, payload=b'', feature=24):
     if len(payload) > 255:
         raise ValueError('Payload is too large.')
@@ -123,7 +141,16 @@ class BT11:
             'pairing_mode': self.byte(10),
             'firmware': self.request(5, feature=0).decode('utf-8', errors='replace').rstrip('\x00'),
             'devices': self.devices(),
+            'active_codec': self.active_codec(),
         }
+
+    def active_codec(self):
+        # The mobile app sends selector 4; an empty payload gets no reply.
+        # Older firmware may not implement this optional status command.
+        try:
+            return codec_status(self.request(0x71, b'\x04'))
+        except RuntimeError:
+            return 'Unavailable (device did not respond)'
 
     def set_name(self, name):
         encoded = name.encode('utf-8')

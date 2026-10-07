@@ -17,10 +17,11 @@ class ControlPanel:
         self.stop = threading.Event()
         self.busy, self.closing, self.failed = False, False, False
         self.current, self.discovered = None, []
+        self.codec_busy = False
         self.controls = []
         root.title('FiiO BT11 Control')
-        root.geometry('760x840')
-        root.minsize(700, 820)
+        root.geometry('760x870')
+        root.minsize(700, 850)
         root.protocol('WM_DELETE_WINDOW', self.close)
         style = ttk.Style(root)
         style.theme_use('vista' if 'vista' in style.theme_names() else 'clam')
@@ -31,6 +32,7 @@ class ControlPanel:
         self.ldac, self.aptx, self.pairing = tk.StringVar(), tk.StringVar(), tk.StringVar()
         self.codec_vars = {code: tk.BooleanVar() for code in CODECS}
         self.firmware = tk.StringVar(value='Firmware: —')
+        self.active_codec = tk.StringVar(value='Active codec: —')
         outer = ttk.Frame(root, padding=18)
         outer.pack(fill='both', expand=True)
         header = ttk.Frame(outer)
@@ -52,6 +54,7 @@ class ControlPanel:
         device.columnconfigure(1, weight=1)
         codecs = ttk.LabelFrame(outer, text='Bluetooth codecs', padding=12)
         codecs.pack(fill='x', pady=(0, 10))
+        ttk.Label(codecs, textvariable=self.active_codec, font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=(0, 6))
         checks = ttk.Frame(codecs)
         checks.pack(fill='x')
         for code, label in CODECS.items():
@@ -95,6 +98,7 @@ class ControlPanel:
         self.button(maintenance, 'Clear all pairings…', lambda: self.maintenance(20)).pack(side='left')
         self.button(maintenance, 'Restore defaults…', lambda: self.maintenance(121)).pack(side='left', padx=8)
         root.after(100, self.poll)
+        root.after(5000, self.refresh_codec)
         self.refresh()
 
     def button(self, parent, text, command):
@@ -123,6 +127,9 @@ class ControlPanel:
     def submit(self, label, operation):
         if self.busy:
             return
+        if self.codec_busy:
+            self.root.after(100, lambda: self.submit(label, operation) if not self.closing else None)
+            return
         self.busy = True
         self.stop.clear()
         self.status.set(label)
@@ -141,6 +148,21 @@ class ControlPanel:
 
     def refresh(self):
         self.submit('Reading BT11 settings…', lambda _: None)
+
+    def refresh_codec(self):
+        if self.closing or self.smoke:
+            return
+        if not self.busy and not self.codec_busy and self.current and not self.failed:
+            self.codec_busy = True
+            def worker():
+                try:
+                    with BT11() as device:
+                        status = device.active_codec()
+                except Exception:
+                    status = 'Unavailable (transmitter busy or disconnected)'
+                self.events.put(('codec', status))
+            threading.Thread(target=worker, daemon=True).start()
+        self.root.after(5000, self.refresh_codec)
 
     @staticmethod
     def mode(variable, mapping):
@@ -246,6 +268,7 @@ class ControlPanel:
         self.aptx.set(APTX_MODES.get(snapshot['aptx_mode'], f"Unknown ({snapshot['aptx_mode']})"))
         self.pairing.set(PAIRING_MODES.get(snapshot['pairing_mode'], f"Unknown ({snapshot['pairing_mode']})"))
         self.firmware.set('Firmware: ' + snapshot['firmware'])
+        self.active_codec.set('Active codec: ' + snapshot.get('active_codec', 'Unavailable'))
         self.fill(self.paired_tree, snapshot['devices'])
 
     def poll(self):
@@ -253,6 +276,12 @@ class ControlPanel:
             kind, data = self.events.get_nowait()
             if kind == 'snapshot':
                 self.render(data)
+            elif kind == 'codec':
+                self.codec_busy = False
+                self.active_codec.set('Active codec: ' + data)
+                if self.closing:
+                    self.root.destroy()
+                    return
             elif kind == 'found':
                 self.discovered = data
                 self.fill(self.found_tree, data)
@@ -260,6 +289,8 @@ class ControlPanel:
                 self.busy = False
                 self.failed = kind == 'error'
                 self.status.set(('Operation failed: ' if self.failed else '') + data)
+                if self.failed:
+                    self.active_codec.set('Active codec: Unavailable')
                 for widget, state in self.controls:
                     is_refresh = isinstance(widget, ttk.Button) and widget['text'] == 'Refresh'
                     widget.configure(state=state if self.current and not self.failed else ('normal' if is_refresh else 'disabled'))
@@ -270,7 +301,7 @@ class ControlPanel:
         self.root.after(100, self.poll)
 
     def close(self):
-        if self.busy:
+        if self.busy or self.codec_busy:
             self.closing = True
             self.stop.set()
             self.root.withdraw()

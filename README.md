@@ -33,6 +33,8 @@ headphones shown there. Only one BT11 should be connected at a time.
 - Close, Auto and Manual pairing modes; nearby discovery; pair and connect.
 - Clear pairings and restore defaults, with confirmation dialogs.
 - Firmware version display.
+- Active Bluetooth codec, refreshed every five seconds while idle, including
+  the reported LDAC bitrate mode and aptX Adaptive quality/lossless status.
 
 Firmware flashing is not implemented natively. The settings window links to the
 official FiiO web updater for that operation. Codec availability depends on the
@@ -69,7 +71,8 @@ uv run python -m unittest discover -s scripts -p 'test_bt11*.py'
 Tested on a BT11 running firmware 1.1.4 with WH-1000XM5 headphones. Validation
 included native reconnection, settings reads and write/read checks, manual
 discovery with pairing-mode restoration, GUI startup/layout, and nine automated
-protocol/GUI tests. New pairing, forgetting, factory reset and automatic pairing
+protocol/GUI tests. Active-codec parsing and background updates also have
+automated coverage. New pairing, forgetting, factory reset and automatic pairing
 were not exercised on the original user's hardware.
 
 BT11 USB identifiers: VID `0x0A12`, PID `0x4007`, usage page `0xFF00`, usage `3`.
@@ -77,6 +80,11 @@ Commands use output report 7, with replies on report 8. Ordinary controls use
 feature 24; firmware version and discovery subscription use core feature 0.
 The protocol was mapped from the user's local FiiO Control mirror and verified
 against the device. No mirrored web assets are included in this project.
+
+Active codec uses command `0x71` with payload `04`, inspected in FiiO's official
+Android Control 4.6.0 app and verified on this BT11. It reports the negotiated
+codec and quality mode, not a measurement of instantaneous audio throughput.
+Firmware without this command displays Unavailable; ordinary settings remain usable.
 
 This is an unofficial utility and is not affiliated with FiiO. No support for
 other transmitter models is claimed.

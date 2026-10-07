@@ -19,6 +19,24 @@ class MissingDevice:
 
 
 class GUITests(unittest.TestCase):
+    def test_codec_update_preserves_unsaved_settings(self):
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            with patch.object(panel_module.ControlPanel, 'refresh'):
+                panel = panel_module.ControlPanel(root)
+                panel.name.set('Unsaved name')
+                panel.ldac.set('Unsaved mode')
+                panel.codec_busy = True
+                panel.events.put(('codec', 'LDAC (660 / 606 kbps)'))
+                panel.poll()
+                self.assertFalse(panel.codec_busy)
+                self.assertEqual(panel.name.get(), 'Unsaved name')
+                self.assertEqual(panel.ldac.get(), 'Unsaved mode')
+                self.assertEqual(panel.active_codec.get(), 'Active codec: LDAC (660 / 606 kbps)')
+        finally:
+            root.destroy()
+
     def test_unplugged_transmitter_keeps_refresh_available(self):
         root = tk.Tk()
         root.withdraw()
